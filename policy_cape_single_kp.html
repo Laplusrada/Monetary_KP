@@ -1,0 +1,171 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monetary Policy × Valuation — By Kittipoom Pensuk</title>
+<meta property="og:title" content="Monetary Policy × Valuation — By Kittipoom Pensuk">
+<meta property="og:description" content="Real Policy Rate (Fed Funds – Core PCE) × Shiller CAPE — One‑frame playbook for valuation vs monetary policy regimes.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+:root{
+  --bg:#0B0F19; --card:#0F1626; --text:#E8EEF9; --muted:#C0C0C0;
+  --accent:#1F4E79; --accent-2:#70D6FF;
+  --cheap:#04630722; --fair:#FBBF2422; --exp:#8B000022;
+}
+*{box-sizing:border-box} body{font-family: ui-sans-serif, system-ui, -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+margin:0;background:var(--bg);color:var(--text)} .header{padding:28px 20px 12px;text-align:center}
+h1{margin:0 0 6px;font-size:28px;line-height:1.2} h2{margin:6px 0 0;font-size:16px;color:var(--muted);font-weight:500}
+.container{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid #1a2540;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.badge{padding:6px 10px;border-radius:999px;background:#121b31;color:var(--muted);font-size:12px}
+.legend{display:flex;gap:12px;flex-wrap:wrap}.legend .item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.legend .swatch{width:14px;height:14px;border-radius:3px;border:1px solid #2b3c63}
+#chartWrapper{position:relative;height:520px}
+footer{padding:24px;color:var(--muted);font-size:12px;text-align:center}
+.table-wrap{overflow:auto} table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid #1f2b49} th{color:#cfe0ff;text-align:left;background:#121b31;position:sticky;top:0}
+.small{font-size:12px;color:var(--muted)}
+.btn{background:linear-gradient(135deg,var(--accent),#3f7ab3);color:#0b1020;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+.btn:active{transform:translateY(1px)} .notice{background:#121b31;border-left:3px solid var(--accent);padding:10px;border-radius:8px;color:#d3e4ff}
+a{color:var(--accent-2);text-decoration:none} a:hover{text-decoration:underline}
+input[type=text]{flex:1;padding:10px;border-radius:10px;border:1px solid #2a3550;background:#0b1020;color:#cfe0ff}
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Monetary Policy & Stock Valuation</h1>
+    <h2>By Kittipoom Pensuk</h2>
+  </div>
+  <div class="container">
+    <div class="card">
+      <div class="controls">
+        <span class="badge">CI: Black–Navy–Royal Blue</span>
+        <button class="btn" id="downloadPng">Download chart (PNG)</button>
+        <div class="legend">
+          <div class="item"><span class="swatch" style="background:var(--cheap)"></span>Cheap (&lt; 20)</div>
+          <div class="item"><span class="swatch" style="background:var(--fair)"></span>Fair (20–30)</div>
+          <div class="item"><span class="swatch" style="background:var(--exp)"></span>Expensive (&gt; 30)</div>
+          <div class="item"><span class="swatch" style="background:#fff;border:2px solid #fff"></span>QT (open)</div>
+          <div class="item"><span class="swatch" style="background:#fff;border:2px solid #fff;box-shadow: inset 0 0 0 4px #fff, 0 0 0 2px #000"></span>QE (solid)</div>
+          <div class="item">▲ Hiking  ▼ Cutting</div>
+        </div>
+      </div>
+      <div class="notice" id="liveNotice">
+        ใส่ลิงก์ Google Sheets (Publish to web เป็น CSV/JSON) ด้านล่างเพื่ออัปเดตกราฟแบบสด (ไม่ต้องอัปโหลดใหม่)
+      </div>
+      <div class="controls" style="margin-top:10px">
+        <input id="dataUrl" type="text" placeholder="วางลิงก์ CSV/JSON ที่ publish แล้ว">
+        <button class="btn" id="applyUrl">Apply</button>
+      </div>
+      <div id="chartWrapper"><canvas id="capeChart"></canvas></div>
+      <p class="small">CAPE = Shiller S&amp;P 500 (monthly). Real Policy Rate = Fed Funds – Core PCE (USA). ▲ ขึ้นดอกเบี้ย / ▼ ลดดอกเบี้ย; วงกลมทึบ = QE, โปร่ง = QT.</p>
+    </div>
+    <div class="card table-wrap">
+      <h3>Dataset snapshot</h3>
+      <table id="dataTable"><thead><tr>
+        <th>Label</th><th>Year</th><th>CAPE</th><th>Real Policy Rate (%)</th><th>Policy</th><th>QE/QT</th><th>Notes</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <footer>© 2025 By Kittipoom Pensuk. Built with assistance from My Second Self. Data: Shiller, FRED, BEA/BLS.</footer>
+  </div>
+
+<script>
+const demo = {
+  points:[
+    {label:"Pre-1991 (Stimulus)",year:1991,cape:17.0,real_rate:2.2,policy:"cutting",qe:false,qt:false,notes:"Early 1990s easing"},
+    {label:"Pre-2001 (Dot-com Peak)",year:2000,cape:44.0,real_rate:4.0,policy:"hiking",qe:false,qt:false,notes:"Elevated CAPE"},
+    {label:"Post-2003 (after dot-com)",year:2003,cape:30.0,real_rate:0.0,policy:"cutting",qe:false,qt:false,notes:"Cuts to support economy"},
+    {label:"Pre-2008 (Housing)",year:2006,cape:27.0,real_rate:3.0,policy:"hiking",qe:false,qt:false,notes:"Tight policy pre-GFC"},
+    {label:"Post-2009 (GFC recovery)",year:2010,cape:16.0,real_rate:-1.5,policy:"easing",qe:true,qt:false,notes:"ZLB + QE"},
+    {label:"Pre-2020 (Pre-COVID)",year:2019,cape:28.0,real_rate:0.5,policy:"cutting",qe:false,qt:true,notes:"Late-cycle"},
+    {label:"Post-2023 (Rate hikes)",year:2024,cape:37.0,real_rate:2.5,policy:"hiking",qe:false,qt:true,notes:"Elevated CAPE with QT"}
+  ],
+  thresholds:{cheap:20,fair_upper:30}
+};
+
+function pointStyleFor(d){
+  const base={radius:7,hoverRadius:8,borderWidth:2};
+  if(d.qe){ return {...base, backgroundColor:'#ffffff', borderColor:'#ffffff'}; }
+  if(d.qt){ return {...base, backgroundColor:'transparent', borderColor:'#ffffff'}; }
+  return {...base, backgroundColor:'#ffffff', borderColor:'#ffffff'};
+}
+function arrowFor(policy){
+  if(policy==='hiking') return '▲';
+  if(policy==='cutting'||policy==='easing') return '▼';
+  if(policy==='stable') return '•';
+  return '•';
+}
+function bandAnnotations(th){
+  return { annotations: {
+    cheap:{type:'box',yMin:0,yMax:th.cheap,backgroundColor:getComputedStyle(document.documentElement).getPropertyValue('--cheap'),borderWidth:0},
+    fair:{type:'box',yMin:th.cheap,yMax:th.fair_upper,backgroundColor:getComputedStyle(document.documentElement).getPropertyValue('--fair'),borderWidth:0},
+    exp:{type:'box',yMin:th.fair_upper,yMax:60,backgroundColor:getComputedStyle(document.documentElement).getPropertyValue('--exp'),borderWidth:0}
+  }};
+}
+function buildTable(points){
+  const tb=document.querySelector('#dataTable tbody'); tb.innerHTML='';
+  points.forEach(d=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${d.label}</td><td>${d.year}</td><td>${d.cape}</td><td>${d.real_rate}</td><td>${d.policy}</td><td>${d.qe?'QE':(d.qt?'QT':'-')}</td><td>${d.notes||''}</td>`;
+    tb.appendChild(tr);
+  });
+}
+let chart;
+function render(dataset){
+  const th=dataset.thresholds||{cheap:20,fair_upper:30};
+  const ctx=document.getElementById('capeChart').getContext('2d');
+  if(chart){chart.destroy();}
+  const ds=(dataset.points||[]).map(d=>({x:d.real_rate,y:d.cape,label:d.label+' '+arrowFor(d.policy),...pointStyleFor(d)}));
+  chart = new Chart(ctx, {type:'scatter',
+    data:{datasets:[{label:'Real Policy Rate vs CAPE',data:ds,parsing:false,showLine:false,
+      pointBackgroundColor:ds.map(p=>p.backgroundColor),pointBorderColor:ds.map(p=>p.borderColor),
+      pointBorderWidth:ds.map(p=>p.borderWidth),pointRadius:ds.map(p=>p.radius),pointHoverRadius:ds.map(p=>p.hoverRadius)}]},
+    options:{
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{
+        const d=dataset.points[ctx.dataIndex];
+        return `${d.label} (${d.year}) — CAPE ${d.cape}, Real ${d.real_rate}%`;
+      }}},annotation:bandAnnotations(th)},
+      scales:{x:{title:{display:true,text:'Real Policy Rate (Fed Funds – Core PCE) %'},grid:{color:'#1f2b49'},ticks:{color:'#cfe0ff'},min:-3,max:6},
+              y:{title:{display:true,text:'CAPE (Shiller S&P 500)'},grid:{color:'#1f2b49'},ticks:{color:'#cfe0ff'},min:0,max:60}}
+    }});
+  const canvas=document.getElementById('capeChart');
+  function drawLabels(){
+    const meta=chart.getDatasetMeta(0); const g=canvas.getContext('2d');
+    g.save(); g.font='12px sans-serif'; g.fillStyle='#cfe0ff';
+    meta.data.forEach((pt,i)=>{const d=dataset.points[i]; const pos=pt.getProps(['x','y'], true);
+      g.fillText(d.label+' '+arrowFor(d.policy), pos.x+8, pos.y-8);});
+    g.restore();
+  }
+  chart.on('afterRender', drawLabels); drawLabels();
+  buildTable(dataset.points||[]);
+}
+async function loadRemote(url){
+  const res=await fetch(url); const txt=await res.text();
+  try{ const j=JSON.parse(txt); return j; }catch(e){
+    const lines=txt.trim().split(/\\r?\\n/); const head=lines.shift().split(',');
+    const rows=lines.map(l=>{const cols=l.split(','); const o={}; head.forEach((h,i)=> o[h.trim()]=cols[i]?cols[i].trim():'');
+      o.year=+o.year; o.cape=+o.cape; o.real_rate=+o.real_rate; o.qe=String(o.qe||'').toLowerCase()==='true'; o.qt=String(o.qt||'').toLowerCase()==='true'; return o;});
+    return {points:rows, thresholds:{cheap:20, fair_upper:30}};
+  }
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  render(demo);
+  document.getElementById('downloadPng').addEventListener('click',()=>{
+    const a=document.createElement('a'); a.download='policy_cape_chart.png';
+    a.href=document.getElementById('capeChart').toDataURL('image/png',1.0); a.click();
+  });
+  document.getElementById('applyUrl').addEventListener('click', async ()=>{
+    const url=document.getElementById('dataUrl').value.trim(); if(!url) return;
+    try{ const remote=await loadRemote(url); render(remote); document.getElementById('liveNotice').innerHTML='✅ Live data applied from: '+url; }
+    catch(e){ document.getElementById('liveNotice').innerHTML='❌ โหลดลิงก์ไม่สำเร็จ: '+e; }
+  });
+});
+</script>
+</body>
+</html>
